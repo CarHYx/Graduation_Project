@@ -1,0 +1,207 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Threading;
+using Unity.VisualScripting;
+using UnityEngine;
+using UnityEngine.Events;
+using static UnityEditor.Progress;
+using static UnityEngine.Windows.WebCam.VideoCapture;
+
+public class AudioState 
+{
+    public bool isBKMusic = true;
+    public bool isSoundEffect = true;
+
+    public float MusicValue = 1f;
+    public float SoundValue = 1f;
+
+}
+
+public enum E_AudioType
+{
+    BkMusic,
+    Effect,
+}
+
+
+public class AudioManager : SingleMonManger<AudioManager>
+{
+    private Dictionary<string, IAudioPlayer> _audioEffect = new Dictionary<string, IAudioPlayer>();
+    private GameObject objMusic;
+    private GameObject objSound;
+
+    private SoundEffect _eff;
+    private BKMusic _bkMusic;
+
+    private E_AudioType audioType = new E_AudioType();
+
+    private AudioState audioState = new AudioState(); 
+
+    private AudioSource audioBkMusic;
+    private AudioSource audioEffect;
+
+
+    protected override void Awake()
+    {
+        //背景音乐
+        objMusic = new GameObject("Music");
+        audioBkMusic = objMusic.AddComponent<AudioSource>();
+        objMusic.AddComponent<BKMusic>();
+        objMusic.transform.SetParent(this.transform);
+
+        //音效
+        objSound = new GameObject("Sound");
+        audioEffect = objSound.AddComponent<AudioSource>();
+        objSound.AddComponent<SoundEffect>();
+        objSound.transform.SetParent(this.transform);
+
+        _bkMusic = objMusic.GetComponent<BKMusic>();
+        _eff = objSound.GetComponent<SoundEffect>();
+
+    }
+    //负责加载到文件资源路径
+    private void Load(string name , E_AudioType audioType = E_AudioType.BkMusic) 
+    {
+        //二次加载音效或者是音乐  / 第一次加载
+        switch (audioType)
+        {
+            case E_AudioType.BkMusic:
+                if (_audioEffect.ContainsKey(name))
+                    _audioEffect[name].LoadAudioPath(name);
+                else
+                {
+                    _audioEffect.Add(name, _bkMusic);
+                    _audioEffect[name].LoadAudioPath(name);
+                }
+                break;
+            case E_AudioType.Effect:
+                if(_audioEffect.ContainsKey(name))
+                    _audioEffect[name].LoadAudioPath(name);
+                else
+                {
+                    _audioEffect.Add(name, _eff);
+                    _audioEffect[name].LoadAudioPath(name);
+                }
+
+                break;
+        }
+    }
+    //整体关闭音效
+    public void Mute(bool mute, E_AudioType audioType = E_AudioType.BkMusic , string name = " ")
+    {
+        switch (audioType)
+        {
+            case E_AudioType.BkMusic:
+                audioBkMusic.mute = !mute;
+                audioState.isBKMusic = mute;
+                Play(name, audioType);
+                break;
+            case E_AudioType.Effect:
+                audioEffect.mute = !mute;
+                audioState.isSoundEffect = mute;
+                break;
+        }
+        JsonMgr.Instance.SaveData(audioState, "AudioState");
+
+    }
+    public void Loop(bool loop)
+    {
+        switch (audioType)
+        {
+            case E_AudioType.BkMusic:
+                audioBkMusic.loop = loop;
+                break;
+            case E_AudioType.Effect:
+                audioEffect.mute = loop;
+                break;
+        }
+    }
+    //bool isOpen = true 当前是否是第一次 true 开启 false
+    public void Play(string name , E_AudioType audioType = E_AudioType.BkMusic , bool isOpen = true)
+    {
+        if (!isOpen)
+            return;
+        switch (audioType)
+        {
+            case E_AudioType.BkMusic:
+                Load(name, audioType);
+                _audioEffect[name].Play();
+                break;
+            case E_AudioType.Effect:
+                Load(name, audioType);
+                _audioEffect[name].Play();
+                break;
+        }
+    }
+
+
+    //设置音量大小
+    public void SetVolume(string name , float volume)
+    {
+        if (_audioEffect.ContainsKey(name))
+            _audioEffect[name].SetVolume(volume);
+        else
+        {
+            Load(name, audioType);
+        }
+    }
+    //暂停
+    public void Stop(string name)
+    {
+        
+    }
+    //静音一个音效
+    public void Mute(string name, bool mute,E_AudioType audioType)
+    {
+        foreach (var item in _audioEffect.Keys)
+        {
+            if (name == item)
+                _audioEffect[item].Mute(mute);
+          
+        }
+        if(_audioEffect.ContainsKey(name))
+        {
+            switch (audioType)
+            {
+                case E_AudioType.BkMusic:
+                    Load(name, audioType);
+                    _audioEffect[name].Mute(mute);
+                    break;
+                case E_AudioType.Effect:
+                    Load(name, audioType);
+                    _audioEffect[name].Mute(mute);
+                    break;
+            }
+        }
+    }
+
+    //创建一个音效的物体在场景中
+    public void CreatMusic(E_AudioType audioType)
+    {
+
+    }
+    /// <summary>
+    /// 初始化 相关操作
+    /// </summary>
+    public void ExecuteAwake(string name , E_AudioType audioType = E_AudioType.BkMusic) 
+    {
+        Load(name, audioType);
+        Debug.Log(JsonMgr.Instance.LoadData<AudioState>("AudioState").isBKMusic);
+        Debug.Log(JsonMgr.Instance.LoadData<AudioState>("AudioState").isSoundEffect);
+        switch (audioType)
+        {
+            case E_AudioType.BkMusic:
+                Play(name, audioType, JsonMgr.Instance.LoadData<AudioState>("AudioState").isBKMusic);
+                break;
+            case E_AudioType.Effect:
+                Play(name, audioType, JsonMgr.Instance.LoadData<AudioState>("AudioState").isSoundEffect);
+                break;
+        }
+      
+
+
+    }
+}
+
+
